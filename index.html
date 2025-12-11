@@ -256,8 +256,8 @@
             <div class="form-group">
                 <label for="protocol">协议</label>
                 <select id="protocol">
-                    <option value="wss">wss (加密)</option>
                     <option value="ws">ws (未加密)</option>
+                    <option value="wss" selected>wss (加密)</option>
                 </select>
             </div>
             
@@ -298,7 +298,7 @@
                 <div class="data-card">
                     <h3>当前压力值</h3>
                     <div class="data-value pressure-value" id="currentPressure">--</div>
-                    <div class="unit">单位 (0-1000)</div>
+                    <div class="unit">(0~50.0N)</div>
                 </div>
                 
                 <div class="data-card">
@@ -357,7 +357,7 @@
                 data: {
                     labels: [], // 时间标签
                     datasets: [{
-                        label: '压力值',
+                        label: '压力值 (N)',
                         data: [],
                         borderColor: '#3498db',
                         backgroundColor: 'rgba(52, 152, 219, 0.1)',
@@ -386,12 +386,12 @@
                         y: {
                             title: {
                                 display: true,
-                                text: '压力值'
+                                text: '压力值 (N)'
                             },
                             min: 0,
-                            max: 1000,
+                            max: 50,
                             ticks: {
-                                stepSize: 200
+                                stepSize: 10
                             }
                         }
                     },
@@ -447,6 +447,21 @@
             addMessage('系统消息', '压力数据已清空', false);
         }
         
+        function isIOS() {
+            return /iP(ad|hone|od)/.test(window.navigator.userAgent);
+        }
+
+        function enforceSecureDefaultsIfNeeded() {
+            const needsSecure = window.location.protocol === 'https:' || isIOS();
+            if (needsSecure && protocolSelect.value !== 'wss') {
+                protocolSelect.value = 'wss';
+                if (!portInput.value || portInput.value === '8083') {
+                    portInput.value = '8084';
+                }
+                addMessage('系统消息', '检测到安全环境，已自动切换到加密 MQTT 连接 (wss)', false);
+            }
+        }
+
         // 连接到MQTT服务器
         function connect() {
             // 验证输入
@@ -454,6 +469,8 @@
                 alert('请填写服务器地址、端口号和订阅主题');
                 return;
             }
+
+            enforceSecureDefaultsIfNeeded();
             
             // 构建连接URL
             const protocol = protocolSelect.value;
@@ -501,7 +518,7 @@
                             // 更新显示
                             updateDataDisplay(data.PRS, data.BAT);
                             updateChart(data.PRS);
-                            addMessage(receivedTopic, `压力: ${data.PRS}, 电池: ${data.BAT}%`, false);
+                            addMessage(receivedTopic, `压力: ${data.PRS.toFixed(1)} N, 电池: ${data.BAT}%`, false);
                         } else {
                             addMessage('数据格式错误', `接收到的数据格式不正确: ${message.toString()}`, true);
                         }
@@ -542,8 +559,8 @@
         
         // 更新数据显示
         function updateDataDisplay(pressure, battery) {
-            // 更新压力显示
-            currentPressureEl.textContent = pressure;
+            // 更新压力显示，格式化为一位小数并添加单位
+            currentPressureEl.textContent = `${pressure.toFixed(1)} N`;
             
             // 更新电池显示
             currentBatteryEl.textContent = `${battery}%`;
@@ -588,6 +605,7 @@
         window.addEventListener('load', () => {
             try {
                 initChart();
+                enforceSecureDefaultsIfNeeded();
                 // 自动连接到 MQTT 服务器
                 connect();
             } catch (err) {
